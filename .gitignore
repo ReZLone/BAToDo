@@ -1,0 +1,6 @@
+*.txt
+*.code-workspace
+*.bak
+*.ini
+test.bat
+testing.bat
