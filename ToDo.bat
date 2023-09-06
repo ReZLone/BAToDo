@@ -180,11 +180,8 @@ goto :EOF
     set expiring_date=
     if !todo[%j%]:~-5!==@done (
         set expiring_date=!todo[%j%]:~-17!
-		echo !expiring_date!
         set expiring_date=!expiring_date:~0,10!
-		echo !expiring_date!
         set expiring_date=!expiring_date:~-4!!expiring_date:~3,2!!expiring_date:~0,2!
-		echo !expiring_date!
     )
 
     if defined expiring_date (
