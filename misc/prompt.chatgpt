@@ -1,0 +1,24 @@
+create an help style page like the manual for this commands with this arguments:
+
+showArgs=-show -s /s
+example: todo -s <starting_line> <limit_line> | todo -s --sect <section>
+
+addArgs=-add -a /a
+example: todo -a <entry> <section> | todo -a --sect <section>
+
+removeArgs=-remove -rem -r -rm /r
+example: todo -r <section> <index/indexes> | todo -r --sect <section>
+
+tickArgs=-done -tick /t -t
+example: todo -t <section> <index/indexes>
+
+deleteArgs=-delete -del -d /d
+example: todo -d <todo filename>
+
+aliasArgs=-alias -al /al
+example: todo -al <todo command> <alias>
+
+settingsArgs=-settings -set /set -st -option -o /o -opt -icons -ico /i -i
+example: todo -st | todo -st <setting_name> <setting_value>
+
+The program is called "todo.bat" and it's purpose is to add a todo list to CMD. This list is divided in sections and each section as their entries enumerated with indexes starting from 1.
