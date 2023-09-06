@@ -4,7 +4,7 @@ setlocal ENABLEDELAYEDEXPANSION
 
 ::Setting up the COSTANT variables
 set TODOPATH=%~dp0
-set TODOFILES=%TODOPATH%data\lists
+set TODOFILES=%TODOPATH%lists
 set TEMPFILES=%Temp%\ToDo
 set CMDPATH=%CD%
 set "PATH=%PATH%;%TODOPATH%libs"
