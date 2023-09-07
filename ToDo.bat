@@ -6,7 +6,6 @@ setlocal ENABLEDELAYEDEXPANSION
 set TODOPATH=%~dp0
 set TODOFILES=%TODOPATH%lists
 set TEMPFILES=%Temp%\ToDo
-set CMDPATH=%CD%
 set "PATH=%PATH%;%TODOPATH%libs"
 
 
@@ -228,11 +227,13 @@ goto :EOF
 	call :displayList
 goto :EOF
 
-:findSection <search_section>
+:findSection
+    ::args: <search_section>
 	set search_sect=%~1
 	set sect_founded=false
 	set i=0
 	if exist %TEMPFILES%\sectors.txt del %TEMPFILES%\sectors.txt
+	echo.> %TEMPFILES%\sectors.txt
 	:makeSectTemp_loop
 		if defined sect_name[%i%] (
 			echo !sect_name[%i%]! >> %TEMPFILES%\sectors.txt 
@@ -240,9 +241,10 @@ goto :EOF
 			goto :makeSectTemp_loop
 		)
 	findstr /I /C:%search_sect% %TEMPFILES%\sectors.txt > NUL
-	if %ERRORLEVEL%==1 call :error "trying to find the '[93m%search_sect%[91m' section. It might not exist" & exit /b 1 
+	if %ERRORLEVEL%==1 call :error "trying to find the '[93m%search_sect%[91m' section. It might not exist" & del %TEMPFILES%\sectors.txt & exit /b 1 
 
-	for /F "tokens=* usebackq" %%F in (`findstr /I /C:%search_sect% %TEMPFILES%\sectors.txt`) do (
+
+    for /F "tokens=* usebackq" %%F in (`findstr /I /C:%search_sect% %TEMPFILES%\sectors.txt`) do (
 	set found_sect=%%F
 	)
 
@@ -277,11 +279,11 @@ goto :EOF
 ::SECTION - Show function - Shows the whole ToDo list or just a selected part
 
 :validateShowArg2
-	if %arg2% LSS %line_count% ( set start_limit=%arg2% ) else ( call :error "trying to use '[93m%arg2%[91m' as a starting line. The line might not exist." & goto :EOF)
+	if %arg2% LSS %line_count% ( set start_limit=%arg2% ) else ( call :error "trying to use '[93m%arg2%[91m' as a starting line. The line might not exist." & exit /b 1 )
 goto :EOF
 
 :validateShowArg3
-	if %arg3% LSS %line_count% ( set end_limit=%arg3% ) else ( call :error "trying to use '[93m%arg3%[91m' as a ending line. The line might not exist." & goto :EOF)
+	if %arg3% LSS %line_count% ( set end_limit=%arg3% ) else ( call :error "trying to use '[93m%arg3%[91m' as a ending line. The line might not exist." & exit /b 1 )
 goto :EOF
 
 :showList todo -s <starting_line> <limit_line> | todo -s --sect <section>
@@ -297,7 +299,7 @@ goto :EOF
 	if not [%arg3%]==[] ( 
 		::Check if the third argument is a string or a number
 		set "temp=" & for /f "delims=012345689" %%i in ("%arg3%") do set temp=%%i
-		if defined temp ( call :error "trying to use '[93m%arg3%[91m' as a ending line. It's not a valid number." & goto :EOF )
+		if defined temp ( call :error "trying to use '[93m%arg3%[91m' as a ending line. It's not a valid number." & exit /b 1 )
 		call :validateShowArg3
 	) else ( 
 		set end_limit=%line_count%
@@ -311,9 +313,9 @@ goto :EOF
 	if %arg2%==--sect ( 
 		if not [%arg3%]==[] ( call :findSection %arg3% || goto :EOF ) else ( goto :displaySections )
 	) else (
-		call :error "trying to use '[93m%arg2%[91m' as a starting line. It's not a valid number." & goto :EOF
+		call :error "trying to use '[93m%arg2%[91m' as a starting line. It's not a valid number." & exit /b 1
 	)
-	if %sect_founded%==false call :error "trying to find '[93m%search_sect%[91m' section. It might not exist." & goto :EOF
+	if %sect_founded%==false call :error "trying to find '[93m%search_sect%[91m' section. It might not exist." & exit /b 1
 	set /a found_sect_ind+=1
 	if defined sect_line[%found_sect_ind%] ( set /a end_limit=!sect_line[%found_sect_ind%]! - 1 ) else ( set /a end_limit=%line_count% )
 	echo. [93mContent of todo.td^>%found_sect%[93m:[0m
@@ -351,9 +353,9 @@ goto :EOF
 	
 	:createEntryOrSection
 		if "%arg2%"=="--sect" ( 
-			if not [%arg3%]==[] ( call :createSection "%arg3%" ) else ( call :error "naming the section. Invalid input." & goto :EOF )
+			if not [%arg3%]==[] ( call :createSection "%arg3%" ) else ( call :error "naming the section. Invalid input." & exit /b 1 )
 		) else (
-			if [%arg3%]==[] ( call :createEntry "%arg2%" ) else ( call :insertEntryInSection "%arg3%" & call :createEntry "%arg2%" !entry_position! )
+			if [%arg3%]==[] ( call :createEntry "%arg2%" ) else ( call :scanSection "%arg3%" & call :createEntry "%arg2%" !entry_position! )
 		)
 	goto :EOF
 
@@ -367,9 +369,9 @@ goto :EOF
 		set %out_var%=%string%
 	goto :EOF
 
-	:insertEntryInSection <target_sect>
+	:scanSection <target_sect>
 		set target_sect=%~1
-		call :findSection %target_sect% || goto :EOF
+		call :findSection %target_sect% || exit /b 1
 		set /a found_sect_ind+=1
 		if defined sect_line[%found_sect_ind%] (
 			set /a entry_position=!sect_line[%found_sect_ind%]! - 1
@@ -381,7 +383,7 @@ goto :EOF
 	:createEntry <string> <position>
 		set og_string=%~1
 		set entry_position=%~2
-		if not defined entry_position call :selectEntrySect
+		if not defined entry_position call :selectEntrySect || goto :EOF
 		call :validateEntSect "%og_string%" new_entry
 		list %TODOFILES%\todo.td /ia %entry_position% "%new_entry% @todo"
 		call :readTodoList
@@ -393,7 +395,7 @@ goto :EOF
 		echo.
 		call :displaySections
 		set /p input_sect="Insert the section where to create the new entry: "
-		call :insertEntryInSection %input_sect%
+		call :scanSection %input_sect% || exit /b 1
 	goto :EOF
 
 	:createSection <string>
@@ -422,7 +424,7 @@ goto :EOF
 :tickFromList
     ::Usage: todo -t <section> <index/indexes>
 
-    if not defined arg2 call :error "trying to find a target section. The second argument was not used." & goto :EOF
+    if not defined arg2 call :error "trying to find a target section. The second argument was not used." & exit /b 1
 
     call :findSection %arg2% || goto :EOF
     set i=3
@@ -432,7 +434,7 @@ goto :EOF
         if defined arg%i% (
             set /a target_line=%found_sect_line% + !arg%i%!
         ) else (
-            call :error "trying to access the third argument. It should be the index of the todo line." & goto :EOF
+            call :error "trying to access the third argument. It should be the index of the todo line." & exit /b 1
         )
 
         set /a found_sect_ind+=1
@@ -449,7 +451,7 @@ goto :EOF
 			)
 			if !todo[%target_line%]:~-5!==@done replaceline %TODOFILES%\todo.td %target_line% "!todo[%target_line%]:~0,-22!@todo"
         ) else (
-            call :error "trying to find the [93m'%arg3%'[91m index inside the [93m'%found_sect%'[91m section." & goto :EOF
+            call :error "trying to find the [93m'%arg3%'[91m index inside the [93m'%found_sect%'[91m section." & exit /b 1
         )
 
     if %i% LSS %arg_number% set /a i+=1 & goto :tickFromList_loop
@@ -460,23 +462,19 @@ goto :EOF
 ::!SECTION
 
 ::SECTION - Remove function - Remove an entry from the ToDo list
-::FIXME - Everything will probably be broken if I remove every section
-::DONE - Removing a section
-::DONE - would be cool to have a way to remove multiple indexes in one command es. todo -r school 1,4,2 (remove 1, 4 and 2 from the school section)
-::FIXME - There is a problem with the above functionality regarding the update of the lines after a deletion
 
 :removeFromList
     ::Usage: todo -r <section> <index/indexes> | todo -r --sect <section>
 	
 	::Checking the existence of the second argument
-	if not defined arg2 call :error "trying to find a [93mtarget section[91m. The second argument was not used." & goto :EOF
+	if not defined arg2 call :error "trying to find a [93mtarget section[91m. The second argument was not used." & exit /b 1
 
 	::Checking if the second method is trying to be used
 	if %arg2%==--sect ( 
-		if not [%arg3%]==[] ( call :removeSection "%arg3%" & goto :EOF ) else ( call :error "trying to find a target section. No third argument used." & goto :EOF )
+		if not [%arg3%]==[] ( call :removeSection "%arg3%" & goto :EOF ) else ( call :error "trying to find a target section. No third argument used." & exit /b 1 )
 	)
 
-	if not defined arg3 call :error "trying to use this [93mindex/indexes[91m. No third argument passed. If you want to delete a section use [93m--sect[91m."  & goto :EOF
+	if not defined arg3 call :error "trying to use this [93mindex/indexes[91m. No third argument passed. If you want to delete a section use [93m--sect[91m." & exit /b 1
 
 	call :findSection %arg2% || goto :EOF
     set i=3
@@ -494,7 +492,7 @@ goto :EOF
 			if !target_line! LSS %limit_line% (
 				set targets_list=!targets_list! !target_line!
 			) else (
-				call :error "trying to find the [93m'!arg%%a!'[91m index inside the [93m'%found_sect%'[91m section." & goto :EOF
+				call :error "trying to find the [93m'!arg%%a!'[91m index inside the [93m'%found_sect%'[91m section." & exit /b 1
 			)
 		)
 	)
@@ -573,18 +571,18 @@ goto :EOF
 :aliasFunc todo -al <command> <alias>
 
 	set base_cmd=%~2
-	if not defined base_cmd ( call :error "trying to use the second argument. You might have not wrote it..." & goto :EOF )
+	if not defined base_cmd ( call :error "trying to use the second argument. You might have not wrote it..." & exit /b 1 )
 
 	set new_alias=%~3
-	if not defined new_alias ( call :error "trying to use the third argument. You might have not wrote it..." & goto :EOF )
+	if not defined new_alias ( call :error "trying to use the third argument. You might have not wrote it..." & exit /b 1 )
 
 	::Check for the base command/function to be defined
 	set found_command=false 
 	for %%a in (%showArgs% %deleteArgs% %addArgs% %aliasArgs% %tickArgs% %removeArgs% %settingsArgs%) do if "%base_cmd%==%%~a" set found_command=true
-	if %found_command%==false call :error "trying to find this command '[93m%base_cmd%[91m'. You might have wrote it wrong..." & goto :EOF
+	if %found_command%==false call :error "trying to find this command '[93m%base_cmd%[91m'. You might have wrote it wrong..." & exit /b 1
 
 	::Check for new alias to be available
-	for %%a in (%showArgs% %deleteArgs% %addArgs% %aliasArgs% %tickArgs% %removeArgs% %settingsArgs%) do if "%new_alias%==%%~a" call :error "trying to use this alias ([93m%new_alias%[91m). This argument might already exist..." & goto :EOF
+	for %%a in (%showArgs% %deleteArgs% %addArgs% %aliasArgs% %tickArgs% %removeArgs% %settingsArgs%) do if "%new_alias%==%%~a" call :error "trying to use this alias ([93m%new_alias%[91m). This argument might already exist..." & exit /b 1
 
 
 :commandSelector 
@@ -613,10 +611,17 @@ goto :EOF
 ::!SECTION
 
 ::SECTION - Settings functions - Change the ToDo list's settings
-::TODO - Function to use arguments directly in order to change a setting
 
 :settingsChanger
 ::Usage:  todo -st | todo -st <setting_name> <setting_value>
+    
+	if defined arg2 (
+		if defined arg3 (
+			for %%a in (%settingsNames%) do if %arg2%==%%a call :changeSettings %arg2% %arg3% & goto :EOF
+		) else (
+			call :error "trying to set the value. The '[93msetting_value[0m' argument wasn't passed" & exit /b 1 
+		)
+	)
 
 	call :loadIcons
 	if %iconsSet%==true ( set "icosetLbl_color=92" & set "cstmicoLbl_color=38;5;88" ) else ( set "icosetLbl_color=38;5;88" & set "cstmicoLbl_color=92" )
@@ -662,7 +667,7 @@ goto :settingsChanger
 goto :settingsChanger
 
 :recreateExpiryDates
-
+::TODO - Recreating the expiration dates after reactivation
 
 goto :EOF
 
@@ -695,11 +700,11 @@ goto :settingsChanger
 
 :changeSettings
 ::args: <setting_name> <setting_value>
-    cd %TODOPATH%
+    pushd %TODOPATH%
 
     ::Check if both arguments have been provided
-    if [%1]==[] goto :EOF
-    if [%2]==[] goto :EOF
+    if [%1]==[] call :error "trying to find the setting. No '[93msetting_name[0m' argument was provided." & exit /b 1
+    if [%2]==[] call :error "trying to set the value. No '[93msetting_value[0m' argument was provided." & exit /b 1
 
     ::Set variables for the line to be replaced and the new value
     set setting_name=%~1
@@ -717,7 +722,7 @@ goto :settingsChanger
     ::Replace the line in the ToDo.bat main file with the new value
     replaceline ToDo.bat %line_num% "	set %setting_name%=%new_value%"
 
-    cd %CMDPATH%
+    popd
 
     ::Reloading settings to apply changes
     call :loadSettings
@@ -725,8 +730,9 @@ goto :settingsChanger
 goto :EOF
 
 :loadSettings
+    set settingsNames=showArgs addArgs removeArgs tickArgs deleteArgs aliasArgs settingsArgs iconsSet iconsSetId cstmTickIcon cstmCrossIcon entryExpiring expirationTime
 
-	::Arguments
+    ::Arguments
 	set showArgs=-show -s /s show
 	set addArgs=-add -a /a add
 	set removeArgs=-remove -rem -r -rm /r remove
