@@ -100,7 +100,7 @@ goto :EOF
 	for %%a in (%tickArgs%) do if %arg1%==%%~a goto :tickFromList
 	for %%a in (%removeArgs%) do if %arg1%==%%~a goto :removeFromList
 	for %%a in (%deleteArgs%) do if %arg1%==%%~a goto :deleteList
-	for %%a in (-help --help -man -h /? /help /h) do if %arg1%==%%~a goto :helpPage
+	for %%a in (-help --help -man -h /? /help /h help) do if %arg1%==%%~a goto :helpPage
 
 	echo. Invalid argument.
 goto :EOF
@@ -196,7 +196,8 @@ goto :EOF
 
 ::SECTION - General use functions
 
-:displayList <starting_line> <final_line>
+:displayList
+    ::args: <starting_line> <final_line>
     set current_line=%~1
     set end_line=%~2
     set sect_line=%~3
@@ -383,19 +384,16 @@ goto :EOF
 		if not defined entry_position call :selectEntrySect
 		call :validateEntSect "%og_string%" new_entry
 		list %TODOFILES%\todo.td /ia %entry_position% "%new_entry% @todo"
-		
 		call :readTodoList
 		echo. [93mNew content of todo.td:[0m
 		call :displayList
 	goto :EOF
 
 	:selectEntrySect
-		::FIXME - Not working causing some errors
 		echo.
 		call :displaySections
 		set /p input_sect="Insert the section where to create the new entry: "
 		call :insertEntryInSection %input_sect%
-		call :createEntry "%arg2%" %entry_position%
 	goto :EOF
 
 	:createSection <string>
@@ -421,9 +419,6 @@ goto :EOF
 ::!SECTION
 
 ::SECTION - Tick function - Tick an entry from the ToDo list 
-::WIP - Add a time expiration to the ticked entrys (this needs to be enabled in the settings and its optional)
-::FIXME - The multiple index is not really working right now try changing to a for loop might be more reliable
-::REVIEW - Need a review
 :tickFromList
     ::Usage: todo -t <section> <index/indexes>
 
@@ -470,7 +465,8 @@ goto :EOF
 ::DONE - would be cool to have a way to remove multiple indexes in one command es. todo -r school 1,4,2 (remove 1, 4 and 2 from the school section)
 ::FIXME - There is a problem with the above functionality regarding the update of the lines after a deletion
 
-:removeFromList todo -r <section> <index/indexes> | todo -r --sect <section>
+:removeFromList
+    ::Usage: todo -r <section> <index/indexes> | todo -r --sect <section>
 	
 	::Checking the existence of the second argument
 	if not defined arg2 call :error "trying to find a [93mtarget section[91m. The second argument was not used." & goto :EOF
@@ -677,7 +673,7 @@ goto :EOF
 	echo. * Note that the icons look way better on Windows Terminal *
 	echo. 1.    2.    3.   4.
 	echo. [92m✅    ✅    ✅    👍🏻
-	echo. [91m ✘    ❎    ❌    👎🏻 [0m
+	echo. [91m ✘    ❎    ❌    👎🏻[0m
 
 	choice /C 1234 /N
 
@@ -731,13 +727,13 @@ goto :EOF
 :loadSettings
 
 	::Arguments
-	set showArgs=-show -s /s
-	set addArgs=-add -a /a
-	set removeArgs=-remove -rem -r -rm /r
-	set tickArgs=-done -tick /t -t
-	set deleteArgs=-delete -del -d /d
-	set aliasArgs=-alias -al /al
-	set settingsArgs=-settings -set /set -st -option -o /o -opt -icons -ico /i -i
+	set showArgs=-show -s /s show
+	set addArgs=-add -a /a add
+	set removeArgs=-remove -rem -r -rm /r remove
+	set tickArgs=-done -tick /t -t tick
+	set deleteArgs=-delete -del -d /d delete
+	set aliasArgs=-alias -al /al alias
+	set settingsArgs=-settings -set /set -st -option -o /o -opt -icons -ico /i -i settings
 	
 	::Icons Settings
 	set iconsSet=true
