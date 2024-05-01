@@ -3,9 +3,10 @@ chcp 65001 > NUL
 setlocal ENABLEDELAYEDEXPANSION
 
 ::Setting up the COSTANT variables
+::FIXME - The TODOPATH and also the TODOFILES variables should be working even when their path has a folder with spaces in their name
 set TODOPATH=%~dp0
 set TODOFILES=%TODOPATH%lists
-set TEMPFILES=%Temp%\ToDo
+if exist *.td set TODOFILES=%CD%
 set "PATH=%PATH%;%TODOPATH%libs"
 
 
@@ -16,9 +17,6 @@ set arg_number=0
     set "arg!arg_number!=%~1"
     shift
 if not [%1]==[] goto :argScan
-
-::Creating the Temp folder
-md %Temp%\ToDo >NUL 2>&1
 
 
 ::Loading the settings and the icons
@@ -48,35 +46,25 @@ goto :argChecker
 	set sect_count=0
 
 	::Scan every line in the todo file 
-	for /F "tokens=*" %%A in (%TODOFILES%\todo.td) do (
+	for /f "tokens=*" %%a in (%TODOFILES%\todo.td) do (
 		set /a line_count+=1
-		set todo[!line_count!]=%%A
+		set todo[!line_count!]=%%a
 	)
 	::Save every section in the todo file
-	for /F "tokens=* usebackq" %%F in (`findstr /N /C:"@sect" %TODOFILES%\todo.td`) do (
-		set section[!sect_count!]=%%F
+	for /f "tokens=1,2 delims=:" %%a in ('findstr /n /C:"@sect" %TODOFILES%\todo.td') do (
+		set sect_line[!sect_count!]=%%a
+		set sect_name[!sect_count!]=%%b
 		set /a sect_count+=1
 	)
 
-	::Clear the section variable from spaces
-	set i=0
-	:clearSpacesSection_loop
-	if defined section[%i%] (
-		::Cleaning up section array
-		set section[%i%]=!section[%i%]: =!
-		set section[%i%]=!section[%i%]:@sect=!
-		set /a i+=1
-		goto :clearSpacesSection_loop
+	set /a sect_max_ind=%sect_count% - 1
+
+	::Remove the @sect and the spaces from the section name
+	for /l %%i in (0,1,%sect_max_ind%) do (
+		set sect_name[%%i]=!sect_name[%%i]:@sect=!
+		set sect_name[%%i]=!sect_name[%%i]: =!
 	)
 
-	::Split section variable in section name and section line
-	set i=0
-	:splitSection_loop
-	if defined section[%i%] (
-		for /f "tokens=1,2 delims=:" %%a in ("!section[%i%]!") do set sect_line[%i%]=%%a& set sect_name[%i%]=%%b
-		set /a i+=1
-		goto :splitSection_loop
-	)
 goto :EOF
 
 :argChecker
@@ -89,7 +77,7 @@ goto :EOF
 
 	::Entry expiring condition of deletion
 	for %%a in (%settingsArgs%) do if %arg1%==%%~a goto :settingsChanger
-	call :deleteExpiredEntrys
+	call :deleteExpiredEntries
 	
 
 	::Check other arguments
@@ -171,11 +159,11 @@ goto :EOF
 	echo   Thank you for using Todo.bat!
 goto :EOF
 
-:deleteExpiredEntrys
+:deleteExpiredEntries
     set todays_date=%date:~-4%%date:~3,2%%date:~0,2%
 
 	set j=1
-    :deleteExpiredEntrys_loop
+    :deleteExpiredEntries_loop
     set expiring_date=
     if !todo[%j%]:~-5!==@done (
         set expiring_date=!todo[%j%]:~-17!
@@ -188,7 +176,7 @@ goto :EOF
 		if %todays_date% GTR %expiring_date% list %TODOFILES%\todo.td /ra !target_index! & call :readTodoList & set /a j-=1
 	)
 
-    if %j% LSS %line_count% set /a j+=1 & goto :deleteExpiredEntrys_loop
+    if %j% LSS %line_count% set /a j+=1 & goto :deleteExpiredEntries_loop
 goto :EOF
 
 ::!SECTION
@@ -232,40 +220,21 @@ goto :EOF
 	set search_sect=%~1
 	set sect_founded=false
 	set i=0
-	if exist %TEMPFILES%\sectors.txt del %TEMPFILES%\sectors.txt
-	echo.> %TEMPFILES%\sectors.txt
-	:makeSectTemp_loop
+	
+	:findSection_loop
 		if defined sect_name[%i%] (
-			echo !sect_name[%i%]! >> %TEMPFILES%\sectors.txt 
+			echo !sect_name[%i%]! | find /i "%search_sect%" >NUL
+			if not errorlevel 1 (
+				set found_sect=!sect_name[%i%]!
+				set sect_founded=true
+				set found_sect_ind=!i!
+				set found_sect_line=!sect_line[%i%]!
+			)
 			set /a i+=1
-			goto :makeSectTemp_loop
+			goto :findSection_loop
+		) else (
+			if %sect_founded%==false call :error "trying to find the '[93m%search_sect%[91m' section. It might not exist" & exit /b 1
 		)
-	findstr /I /C:%search_sect% %TEMPFILES%\sectors.txt > NUL
-	if %ERRORLEVEL%==1 call :error "trying to find the '[93m%search_sect%[91m' section. It might not exist" & del %TEMPFILES%\sectors.txt & exit /b 1 
-
-
-    for /F "tokens=* usebackq" %%F in (`findstr /I /C:%search_sect% %TEMPFILES%\sectors.txt`) do (
-	set found_sect=%%F
-	)
-
-	::Cleaning up the found_sect variable
-	set found_sect=%found_sect: =%
-	set found_sect=%found_sect:@sect=%
-
-
-	::Removing the temporary section list file
-	del %TEMPFILES%\sectors.txt
-
-
-	::Actually finding the corrisponding line to the found section
-	set i=0
-	:findLineSect_loop
-		if defined sect_name[%i%] (
-			if #%found_sect%#==#!sect_name[%i%]!# set found_sect_ind=%i%& set sect_founded=true
-			set /a i+=1
-			if not %sect_founded%==true goto :findLineSect_loop
-		)
-	set found_sect_line=!sect_line[%found_sect_ind%]!
 
 exit /b 0
 
@@ -402,13 +371,13 @@ goto :EOF
 		set sect_color=94
 
 		if defined arg4 (
-			for %%a in (-r -red -Red -RED -R) do if "%arg4%"=="%%~a" set sect_color=91
-			for %%a in (-g -green -Green -GREEN -G) do if "%arg4%"=="%%~a" set sect_color=92
+			for %%a in (-r red -red -Red -RED -R) do if "%arg4%"=="%%~a" set sect_color=91
+			for %%a in (-g green -green -Green -GREEN -G) do if "%arg4%"=="%%~a" set sect_color=92
 			for %%a in (-y yellow -Yellow -YELLOW -Y) do if "%arg4%"=="%%~a" set sect_color=93
-			for %%a in (-b -blue -Blue -BLUE -B) do if "%arg4%"=="%%~a" set sect_color=94
-			for %%a in (-m -magenta -Magenta -MAGENTA -M) do if "%arg4%"=="%%~a" set sect_color=95
-			for %%a in (-c -cyan -Cyan -CYAN -C) do if "%arg4%"=="%%~a" set sect_color=96
-			for %%a in (-w -white -White -WHITE -W) do if "%arg4%"=="%%~a" set sect_color=97
+			for %%a in (-b blue -blue -Blue -BLUE -B) do if "%arg4%"=="%%~a" set sect_color=94
+			for %%a in (-m magenta -magenta -Magenta -MAGENTA -M) do if "%arg4%"=="%%~a" set sect_color=95
+			for %%a in (-c cyan -cyan -Cyan -CYAN -C) do if "%arg4%"=="%%~a" set sect_color=96
+			for %%a in (-w white -white -White -WHITE -W) do if "%arg4%"=="%%~a" set sect_color=97
 		)
 		set new_sect=%~1
 		call :validateEntSect "%new_sect%" new_sect
@@ -422,7 +391,7 @@ goto :EOF
 
 ::SECTION - Tick function - Tick an entry from the ToDo list 
 :tickFromList
-    ::Usage: todo -t <section> <index/indexes>
+::Usage: todo -t <section> <index/indexes>
 
     if not defined arg2 call :error "trying to find a target section. The second argument was not used." & exit /b 1
 
@@ -446,7 +415,9 @@ goto :EOF
 
         if %target_line% LSS %limit_line% (
 			if !todo[%target_line%]:~-5!==@todo (
-				powershell -command "((Get-date).AddDays(%expirationTime%)).ToString('dd-MM-yyyy')">%TEMPFILES%\captureVar && set /p new_expiration_date=<%TEMPFILES%\captureVar && del %TEMPFILES%\captureVar
+				for /f "tokens=*" %%a in ('powershell -command "((Get-date).AddDays(%expirationTime%)).ToString('dd-MM-yyyy')"') do (
+					set new_expiration_date=%%a
+				)
 				replaceline %TODOFILES%\todo.td %target_line% "!todo[%target_line%]:@todo=![exp:!new_expiration_date!] @done"
 			)
 			if !todo[%target_line%]:~-5!==@done replaceline %TODOFILES%\todo.td %target_line% "!todo[%target_line%]:~0,-22!@todo"
@@ -464,7 +435,7 @@ goto :EOF
 ::SECTION - Remove function - Remove an entry from the ToDo list
 
 :removeFromList
-    ::Usage: todo -r <section> <index/indexes> | todo -r --sect <section>
+::Usage: todo -r <section> <index/indexes> | todo -r --sect <section>
 	
 	::Checking the existence of the second argument
 	if not defined arg2 call :error "trying to find a [93mtarget section[91m. The second argument was not used." & exit /b 1
@@ -617,11 +588,15 @@ goto :EOF
     
 	if defined arg2 (
 		if defined arg3 (
-			for %%a in (%settingsNames%) do if %arg2%==%%a call :changeSettings %arg2% %arg3% & goto :EOF
+			for %%a in (%settingsNames%) do (
+				if "%arg2%"=="%%a" call :changeSettings %arg2% %arg3%
+			)
+			goto :EOF
 		) else (
-			call :error "trying to set the value. The '[93msetting_value[0m' argument wasn't passed" & exit /b 1 
+			call :error "trying to set the value. The '[93msetting_value[91m' argument wasn't passed." & exit /b 1
 		)
 	)
+
 
 	call :loadIcons
 	if %iconsSet%==true ( set "icosetLbl_color=92" & set "cstmicoLbl_color=38;5;88" ) else ( set "icosetLbl_color=38;5;88" & set "cstmicoLbl_color=92" )
@@ -677,8 +652,8 @@ goto :EOF
 	echo. [93mChoose one of the following presets: [0m
 	echo. * Note that the icons look way better on Windows Terminal *
 	echo. 1.    2.    3.   4.
-	echo. [92m✅    ✅    ✅    👍🏻
-	echo. [91m ✘    ❎    ❌    👎🏻[0m
+	echo. [92m✅    ✓    ✅    ✅
+	echo. [91m ✘    ✘    ❎    ❌[0m
 
 	choice /C 1234 /N
 
@@ -688,13 +663,13 @@ goto settingsChanger
 
 :cstmsettingsChanger
 	::FIXME - This function can't work with the "all-in-one" method since I can't write emojis/symbols with ReplaceLine or List might need to use the old one (getting values from a file)
-	echo [31m This fuction still doesn't exist/work but will be implemented ASAP[0m
+	@REM echo [31m This fuction still doesn't exist/work but will be implemented ASAP[0m
 	echo.
-	@REM echo.
-	@REM set /p tick_icon="Insert new tick icon: "
-	@REM call :changeSettings cstmTickIcon "%tick_icon%"
-	@REM set /p tick_icon="Insert new cross icon: "
-	@REM call :changeSettings cstmCrossIcon "%cross_icon%"
+	echo.
+	set /p tick_icon="Insert new tick icon: "
+	call :changeSettings cstmTickIcon "%tick_icon%"
+	set /p tick_icon="Insert new cross icon: "
+	call :changeSettings cstmCrossIcon "%cross_icon%"
 
 goto :settingsChanger
 
@@ -760,9 +735,9 @@ goto :EOF
 
 	::Load the selected icon set if there is one
 	if %iconsSetId%==1 set "tick_icon=✅" & set "cross_icon=✘"
-	if %iconsSetId%==2 set "tick_icon=✅" & set "cross_icon=❎"
-	if %iconsSetId%==3 set "tick_icon=✅" & set "cross_icon=❌"
-	if %iconsSetId%==4 set "tick_icon=👍🏻" & set "cross_icon=👎🏻"
+	if %iconsSetId%==2 set "tick_icon=✓" & set "cross_icon=✘"
+	if %iconsSetId%==3 set "tick_icon=✅" & set "cross_icon=❎"
+	if %iconsSetId%==4 set "tick_icon=✅" & set "cross_icon=❌"
 
 goto :EOF
 
